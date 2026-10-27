@@ -54,4 +54,5 @@ curl -fsS https://office.rsms.openzoo.net/healthcheck
 发布前配置未齐时只部署 Office HTTPS 入口：`sh deploy/deploy.sh --office-only`。
 更新只构建和更新 rsms 服务；请不要运行 `docker system prune` 或删除已有 Office 数据卷。
 平台镜像使用内容编号标签，避免同一标签重建后 Swarm 未更新容器。`.env` 及所有 `.env.*` 文件都不进入镜像；环境备份放在应用目录以外。
+更新使用 start-first：新副本健康后停止旧副本。验收通过后，只移除本平台已停止的旧容器及不再使用的 `rsms-platform` 旧镜像；不要执行全局镜像或数据卷清理。
 现有其它 Docker 服务保持原配置。
