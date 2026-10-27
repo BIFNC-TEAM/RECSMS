@@ -12,6 +12,7 @@ import urllib.request
 from unittest.mock import patch
 import phone_auth
 import server
+import content_pages
 
 
 class PhoneAuthTest(unittest.TestCase):
@@ -104,6 +105,8 @@ class PhoneAuthTest(unittest.TestCase):
         client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         base='http://127.0.0.1:'+str(httpd.server_port)
         def request(path,data=None):
+            if data is not None and path in ('phone/send-code', 'phone/verify'):
+                data={**data,**content_pages.metadata(),'accepted':True}
             req=urllib.request.Request(base+'/api/'+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json','X-Requested-With':'StandardsPlatform'})
             try:
                 with client.open(req) as response:return response.status,json.loads(response.read())

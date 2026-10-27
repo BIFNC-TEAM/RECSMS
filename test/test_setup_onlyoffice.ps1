@@ -1,6 +1,6 @@
-# Run with Windows PowerShell 5.1: powershell.exe -NoProfile -ExecutionPolicy Bypass -File test_setup_onlyoffice.ps1
+# Run with Windows PowerShell 5.1: powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/test_setup_onlyoffice.ps1
 $ErrorActionPreference = 'Stop'
-$scriptPath = Join-Path $PSScriptRoot 'setup_onlyoffice.ps1'
+$scriptPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'setup_onlyoffice.ps1'
 $tokens = $null
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)

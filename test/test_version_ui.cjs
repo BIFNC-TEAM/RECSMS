@@ -1,10 +1,12 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawn}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'version-ui-'));
  const python=process.env.PYTHON_EXECUTABLE||'python',base='http://127.0.0.1:18767';
- const child=spawn(python,['-u',path.join(__dirname,'server.py'),'--port','18767'],{env:{...process.env,STANDARD_DB:path.join(temp,'platform.db'),STANDARD_ADMIN_PASSWORD:'version-ui-password'},stdio:'ignore',windowsHide:true});
+ const child=spawn(python,['-u',path.join(projectRoot,'server.py'),'--port','18767'],{env:{...process.env,STANDARD_DB:path.join(temp,'platform.db'),STANDARD_ADMIN_PASSWORD:'version-ui-password'},stdio:'ignore',windowsHide:true});
  let browser;
  try{
   let ready=false;for(let i=0;i<80;i++){try{if((await fetch(base)).ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,100))}assert(ready);
@@ -31,8 +33,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal(await page.locator('.date-placeholder').first().innerText(),'开始日期');
   await page.getByLabel('开始日期',{exact:true}).fill('2026-01-01');assert(await page.locator('.date-filter').first().evaluate(e=>e.classList.contains('has-value')));
   await page.getByLabel('开始日期',{exact:true}).fill('');await page.getByRole('heading',{name:'标准文档库',exact:true}).click();
-  fs.mkdirSync(path.join(__dirname,'data'),{recursive:true});
-  await page.screenshot({path:path.join(__dirname,'data/ui-library.png'),fullPage:true});
+  fs.mkdirSync(path.join(projectRoot,'data'),{recursive:true});
+  await page.screenshot({path:path.join(projectRoot,'data/ui-library.png'),fullPage:true});
   assert.equal(await page.locator('.cards .card').first().locator('strong').innerText(),'1');
   assert.equal(await page.locator('tbody tr').count(),1);
   await page.getByRole('button',{name:'2 个分支',exact:true}).click();
@@ -51,7 +53,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   const first=page.locator('[data-version-row]').first(),left=await first.locator('.version-summary').boundingBox(),right=await first.locator('.version-side').boundingBox();assert(right.x>left.x);
   assert.equal(await page.locator('.version-tree .tree-node').count(),6);
   const graph=(await api(admin,'documents/'+id)).version_graph;assert(graph.edges.some(e=>e.kind==='fork'));assert(graph.edges.some(e=>e.kind==='merge'));assert(graph.edges.some(e=>e.kind==='restore'));
-  await page.screenshot({path:path.join(__dirname,'data/ui-versions.png'),fullPage:true});
+  await page.screenshot({path:path.join(projectRoot,'data/ui-versions.png'),fullPage:true});
   await page.locator(`[data-version-row="${old}"]`).getByRole('button',{name:'查看此版本正文',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-viewed-version]')?.dataset.viewedVersion===String(id),old);
   assert.equal(await page.locator('.tabs .active').innerText(),'文档正文');assert.equal(await page.locator('.body-text').innerText(),'起始正文：基础条款');assert.equal(await page.locator('[data-viewed-version]').getAttribute('data-viewed-version'),String(old));
   assert(await page.getByRole('button',{name:'编辑文档',exact:true}).isDisabled());
@@ -74,7 +76,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   await page.locator('.archive-notice').getByRole('button',{name:'恢复归档',exact:true}).click();
   await page.getByRole('button',{name:'确认',exact:true}).click();await page.locator('#modal').waitFor({state:'hidden'});
   await page.locator('.archive-notice').waitFor({state:'detached'});
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(__dirname,'data/ui-mobile.png'),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile layout overflow');
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(projectRoot,'data/ui-mobile.png'),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile layout overflow');
   assert.deepEqual(errors,[]);console.log('PASS: date placeholders, clean copy, five tools, right-aligned history, historical viewing state, readonly original, real fork/merge/restore graph, derived draft, mobile layout.');
  }finally{if(browser)await browser.close();const done=new Promise(r=>child.once('exit',r));child.kill();await done;if(path.dirname(temp)===os.tmpdir())fs.rmSync(temp,{recursive:true,force:true})}
 })().catch(e=>{console.error(e);process.exitCode=1});

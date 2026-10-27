@@ -1,15 +1,17 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawn}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'cycle-ui-')),base='http://127.0.0.1:18768';
- const child=spawn(process.env.PYTHON_EXECUTABLE||'python',['-u','server.py','--port','18768'],{cwd:__dirname,env:{...process.env,STANDARD_DB:path.join(tmp,'db.sqlite'),STANDARD_ADMIN_PASSWORD:'cycle-ui-password'},stdio:'ignore',windowsHide:true});
+ const child=spawn(process.env.PYTHON_EXECUTABLE||'python',['-u','server.py','--port','18768'],{cwd:projectRoot,env:{...process.env,STANDARD_DB:path.join(tmp,'db.sqlite'),STANDARD_ADMIN_PASSWORD:'cycle-ui-password'},stdio:'ignore',windowsHide:true});
  let browser;
  try{
   for(let i=0;i<100;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
   browser=await chromium.launch({headless:true,channel:process.env.BROWSER_CHANNEL||'msedge'});
   const admin=await browser.newContext({viewport:{width:1600,height:1100}}),alice=await browser.newContext(),bob=await browser.newContext();
-  async function api(ctx,url,data){const r=data?await ctx.request.post(base+'/api/'+url,{data,headers:{'X-Requested-With':'StandardsPlatform'}}):await ctx.request.get(base+'/api/'+url);assert(r.ok(),await r.text());return r.json()}
+  async function api(ctx,url,data){if(url==='login')data={...data,...await(await ctx.request.get(base+'/api/policies')).json(),accepted:true};const r=data?await ctx.request.post(base+'/api/'+url,{data,headers:{'X-Requested-With':'StandardsPlatform'}}):await ctx.request.get(base+'/api/'+url);assert(r.ok(),await r.text());if(url==='login')await ctx.request.post(base+'/api/onboarding',{data:{state:'skipped'},headers:{'X-Requested-With':'StandardsPlatform'}});return r.json()}
   await api(admin,'login',{username:'admin',password:'cycle-ui-password'});
   for(const username of ['alice','bob'])await api(admin,'users',{username,phone:username==='alice'?'13900000001':'13900000002',role:'editor',password:'cycle-user-password'});
   await api(alice,'login',{username:'alice',password:'cycle-user-password'});await api(bob,'login',{username:'bob',password:'cycle-user-password'});
@@ -33,7 +35,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   await page.locator('[data-tab="versions"]').click();await page.locator('[data-tab="versions"].active').waitFor();assert.equal(await page.locator('[data-version-row]').count(),1);
   assert.equal(await page.locator('[data-derive]').count(),0);assert.equal(await page.locator('[data-action="merge"]').count(),0);
   await page.locator(`[data-view-version="${release}"]`).first().click();await page.locator('[data-viewed-version="'+release+'"]').waitFor();assert(await page.getByRole('button',{name:'编辑文档',exact:true}).isDisabled());
-  await page.screenshot({path:path.join(__dirname,'data/three-phase-ui.png'),fullPage:true});
+  await page.screenshot({path:path.join(projectRoot,'data/three-phase-ui.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
   console.log('PASS: library navigation, three states, no branches, unshared editor access, public admin-only editing, timers, approval, immutable publication, next round, published history listing, mobile.');
  }finally{if(browser)await browser.close();const done=new Promise(r=>child.once('exit',r));child.kill();await done;if(path.dirname(tmp)===os.tmpdir())fs.rmSync(tmp,{recursive:true,force:true})}

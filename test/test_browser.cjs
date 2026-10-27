@@ -1,3 +1,5 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 // Optional browser verification: PLAYWRIGHT_MODULE may point to a bundled installation.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawn}=require('node:child_process');
@@ -9,7 +11,7 @@ const assert=require('node:assert/strict');
 (async()=>{
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'standard-browser-'));
   const python=process.env.PYTHON_EXECUTABLE||'python';
-  const start=()=>spawn(python,['-u',path.join(__dirname,'server.py'),'--port','18765'],{env:{...process.env,STANDARD_DB:path.join(temp,'browser.db'),STANDARD_ADMIN_PASSWORD:'browser-test-password'},stdio:'ignore',windowsHide:true});
+  const start=()=>spawn(python,['-u',path.join(projectRoot,'server.py'),'--port','18765'],{env:{...process.env,STANDARD_DB:path.join(temp,'browser.db'),STANDARD_ADMIN_PASSWORD:'browser-test-password'},stdio:'ignore',windowsHide:true});
   let child=start();
   const base='http://127.0.0.1:18765';
   let browser;
@@ -87,8 +89,8 @@ const assert=require('node:assert/strict');
     assert.equal(merged,await b.inputValue());
     assert.equal(merged.split('起草人补充。').length,2);
     assert.equal(merged.split('管理员补充。').length,2);
-    fs.mkdirSync(path.join(__dirname,'data'),{recursive:true});
-    await writer.screenshot({path:path.join(__dirname,'data/collab-preview.png'),fullPage:true});
+    fs.mkdirSync(path.join(projectRoot,'data'),{recursive:true});
+    await writer.screenshot({path:path.join(projectRoot,'data/collab-preview.png'),fullPage:true});
     await writer.getByRole('button',{name:'同步并关闭',exact:true}).click();
     await writer.locator('.collab-dialog').waitFor({state:'detached'});
     // Restart the actual service process, keeping the database and signed-in browser sessions.
@@ -128,8 +130,8 @@ const assert=require('node:assert/strict');
     await page.getByLabel('发布时间（北京时间）').fill(future);
     await page.getByRole('button',{name:'确认',exact:true}).click();
     await page.getByRole('button',{name:'取消发布计划',exact:true}).waitFor();
-    fs.mkdirSync(path.join(__dirname,'data'),{recursive:true});
-    await page.screenshot({path:path.join(__dirname,'data/preview.png'),fullPage:true});
+    fs.mkdirSync(path.join(projectRoot,'data'),{recursive:true});
+    await page.screenshot({path:path.join(projectRoot,'data/preview.png'),fullPage:true});
     await page.getByRole('button',{name:'取消发布计划',exact:true}).click();
     await page.getByRole('button',{name:'确认',exact:true}).click();
     await page.getByRole('button',{name:'立即发布',exact:true}).click();

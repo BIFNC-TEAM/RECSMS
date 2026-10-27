@@ -1,5 +1,21 @@
 # 标准文件协作与版本管理平台
 
+## 品牌、新手教程和测试目录
+
+平台登录页、页头、浏览器图标和教程使用用户提供的原始 Logo，资源为 `web/logo.png`。
+账号首次进入时展示7步教程，可上一步、下一步或跳过；完成/跳过状态保存在账号下，更换浏览器也不重复弹出。
+“使用说明”可重新查看教程。教程不会创建示例文档、修改文档或扩大权限。
+全部测试脚本集中在 `test/`，历史分支夹具位于 `test/legacy/`；运行方法见 [test/README.md](test/README.md)。测试不打包进生产镜像。
+
+## 工作空间与登录预览更新
+
+手机号/原密码使用标签切换，登录须主动勾选两份法律文本，服务端验证版本并记录草案确认。
+服务协议及隐私政策按用户要求暂为预览草案，运营主体等事实待补，不作为已完成法定告知的正式政策；详见 [LEGAL_REVIEW.md](LEGAL_REVIEW.md)。
+默认建议目录共33项（根目录、7类及25个子目录），首次迁移添加，不覆盖已有文档或目录；父目录检索包含子目录。
+列表与详情页支持个人收藏，工作空间新增“我的收藏”；收藏不会增加文档权限。
+“使用说明”包含状态流转、统一修订、自动保存、评审闭环、历史附件、权限和检索，公开入口 `/help`。
+新建文档默认空白，在 ONLYOFFICE 编辑或从 Word 导入，不再填写正文输入框。
+
 ## RSMS 云端部署
 
 正式环境部署目录 `/home/ubuntu/rsms`，Docker Swarm 复用现有 Traefik 和 ONLYOFFICE。
@@ -49,7 +65,7 @@ npm run build
 
 ONLYOFFICE Docs 10.0 已部署到 `81.70.105.92`，容器名 `standards-office-docs`，部署目录 `/home/ubuntu/standards-office`。容器限制 2 CPU、3GB 内存，设置自动重启及容器日志轮转。回调桥接由 `standards-office-callback.service` 管理。未改变该主机已有 Swarm 业务服务。
 
-已用真实编辑器验证：两个独立账号打开同一文档并编辑，关闭后收到最终保存回调，两人的新增内容均在返回的 DOCX 中，并成功形成平台版本。验证脚本为 `test_live_onlyoffice.cjs`，它创建明确标识的测试文档和测试编辑账号；截图在 `data/onlyoffice-live-collaboration.png`。这项验证覆盖实际编辑及保存，不等同于生产负载或全部 Word 格式兼容性测试。
+已用真实编辑器验证：两个独立账号打开同一文档并编辑，关闭后收到最终保存回调，两人的新增内容均在返回的 DOCX 中，并成功形成平台版本。验证脚本为 `test/test_live_onlyoffice.cjs`，它创建明确标识的测试文档和测试编辑账号；截图在 `data/onlyoffice-live-collaboration.png`。这项验证覆盖实际编辑及保存，不等同于生产负载或全部 Word 格式兼容性测试。
 
 当前本地平台与远端编辑器通过 SSH 连接，不新增公网端口：
 
@@ -119,11 +135,11 @@ Document Server 官方 Docker 文档列出至少 4GB RAM 和 40GB 可用空间�
 ## 当前验证
 
 ```powershell
-..\.venv\Scripts\python.exe -m unittest -v test_lifecycle.py
-node test_lifecycle_ui.cjs
+..\.venv\Scripts\python.exe -m unittest discover -s test -t . -v
+node test/test_lifecycle_ui.cjs
 ```
 
-浏览器测试可设置 PLAYWRIGHT_MODULE、PYTHON_EXECUTABLE，默认使用 Edge。覆盖三阶段权限、无需分享共同编辑、公开退回、意见闭环、批准失效、发布冻结、下一轮、定时切换阻塞、迁移留存、签名 Office 回调以及桌面/移动端界面。旧分支工作流测试保存在 legacy_tests/，仅作历史资料。
+浏览器测试可设置 PLAYWRIGHT_MODULE、PYTHON_EXECUTABLE，默认使用 Edge。覆盖三阶段权限、无需分享共同编辑、公开退回、意见闭环、批准失效、发布冻结、下一轮、定时切换阻塞、迁移留存、签名 Office 回调以及桌面/移动端界面。旧分支工作流测试保存在 test/legacy/，仅作历史资料。
 
 ## 部署边界
 
@@ -135,4 +151,4 @@ ONLYOFFICE 使用快速共同编辑模式，平台每5秒请求 forcesave，将�
 
 编辑窗口显示上次成功保存时间，网络断开或保存请求失败时显示提示并自动重试。重新连接、文档引擎丢失缓存后，文件请求会从平台最近保存的稿件恢复。尚未从浏览器发送出去的修改，不能保证在断电断网时保留。
 
-`test_live_autosave.cjs` 创建一份标记清楚的测试文档，使用真实编辑器验证未退出时回写、工作稿下载、离线提示、重连及最终归档；`test_lifecycle.py` 覆盖签名回调、落库、源文件恢复及失败重试。
+`test/test_live_autosave.cjs` 创建一份标记清楚的测试文档，使用真实编辑器验证未退出时回写、工作稿下载、离线提示、重连及最终归档；`test/test_lifecycle.py` 覆盖签名回调、落库、源文件恢复及失败重试。

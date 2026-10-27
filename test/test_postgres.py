@@ -11,7 +11,7 @@ class PostgresIntegrationTest(unittest.TestCase):
         import psycopg
         from psycopg.conninfo import make_conninfo
         base = os.environ['RSMS_TEST_DATABASE_URL']
-        suites = unittest.defaultTestLoader.loadTestsFromNames(['test_accounts', 'test_lifecycle', 'test_phone_auth'])
+        suites = unittest.defaultTestLoader.loadTestsFromNames(['test.test_accounts', 'test.test_lifecycle', 'test.test_phone_auth', 'test.test_workspace'])
         result = unittest.TestResult()
         def cases(suite):
             for item in suite:
@@ -26,5 +26,5 @@ class PostgresIntegrationTest(unittest.TestCase):
                         test.run(result)
                 finally:
                     db.execute('DROP SCHEMA ' + schema + ' CASCADE')
-        self.assertEqual(result.testsRun, 15)
+        self.assertEqual(result.testsRun, 18)
         self.assertFalse(result.errors + result.failures, '\n'.join(error for _, error in result.errors + result.failures))

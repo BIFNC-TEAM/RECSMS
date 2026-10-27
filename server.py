@@ -23,6 +23,8 @@ import review_issues
 import database
 import object_store
 import shared_cache
+import workspace
+import content_pages
 import zipfile
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
@@ -109,6 +111,8 @@ def init():
         accounts.init(db)
         phone_auth.init(db)
         review_issues.init(db)
+        workspace.init(sys.modules[__name__], db)
+        content_pages.init(db)
 
 
 def required(data, field, maximum=1000):
@@ -296,7 +300,11 @@ def route(db, user, method, path, query, data):
         audit(db, user, '通过分享链接加入协作', link['doc_id'], 'share=' + str(link['id']))
         return {'id': link['doc_id']}
     if path == '/api/me':
-        return dict(db.execute('SELECT id,username,role,phone,phone_verified FROM users WHERE id=?',(user['id'],)).fetchone()) | {'cloud_storage':database.production()}
+        return dict(db.execute('SELECT id,username,role,phone,phone_verified FROM users WHERE id=?',(user['id'],)).fetchone()) | {'cloud_storage':database.production(), 'onboarding_state':workspace.onboarding_state(db,user['id'])}
+    if path == '/api/onboarding' and method == 'POST':
+        return workspace.finish_onboarding(core, db, user, data)
+    if path == '/api/help' and method == 'GET':
+        return {'html': content_pages.fragment('guide')}
     if path == '/api/users':
         if method == 'POST':
             require_role(user, 'admin')
@@ -329,7 +337,7 @@ def route(db, user, method, path, query, data):
             else:
                 db.execute('INSERT INTO directories(name,parent_id) VALUES(?,?)', (required(data, 'name', 100), parent))
             audit(db, user, '新增目录', detail=data['name'])
-        return [dict(r) for r in db.execute('SELECT * FROM directories')]
+        return [dict(r) for r in db.execute('SELECT * FROM directories ORDER BY id')]
     if path == '/api/todos':
         if method == 'POST':
             db.execute('UPDATE todos SET done=1 WHERE id=? AND user_id=?', (data.get('id'), user['id']))
@@ -376,6 +384,8 @@ def route(db, user, method, path, query, data):
             audit(db, user, '创建文档', doc_id)
             return {'id': doc_id}
         result = []
+        favorites = {r['doc_id'] for r in db.execute('SELECT doc_id FROM favorites WHERE user_id=?', (user['id'],))}
+        directory_scope = workspace.directory_scope(db, query['directory_id']) if query.get('directory_id') else None
         visible = []
         for row in db.execute("SELECT d.*,v.label,COALESCE((SELECT s.body FROM office_sessions s WHERE s.doc_id=d.id AND s.version_id=d.current_version AND s.saved IS NOT NULL AND s.state IN ('editing','ready','error') ORDER BY s.updated DESC LIMIT 1),v.body) AS body,u.username AS owner FROM documents d JOIN versions v ON v.id=d.current_version JOIN users u ON u.id=d.owner_id WHERE d.id NOT IN (SELECT doc_id FROM legacy_materials) ORDER BY d.updated DESC,d.id DESC"):
             try:
@@ -383,12 +393,17 @@ def route(db, user, method, path, query, data):
             except Error:
                 continue
             item = dict(row); item.pop('body')
+            item['favorite'] = row['id'] in favorites
+            if query.get('favorite') == '1' and not item['favorite']:
+                continue
             item['is_archived'] = bool(access['is_archived'])
             visible.append(item)
             searchable = (row['title'] + row['number'] + row['body']).lower()
             if query.get('q', '').lower() not in searchable:
                 continue
-            if any(str(row[k]) != query[k] for k in ('state', 'directory_id', 'owner_id') if query.get(k)):
+            if any(str(row[k]) != query[k] for k in ('state', 'owner_id') if query.get(k)):
+                continue
+            if directory_scope is not None and row['directory_id'] not in directory_scope:
                 continue
             if query.get('tag', '') not in row['tags']:
                 continue
@@ -404,6 +419,8 @@ def route(db, user, method, path, query, data):
         doc_id = int(parts[2])
         doc = document(db, user, doc_id)
         action = parts[3] if len(parts) > 3 else ''
+        if action == 'favorite' and method == 'POST':
+            return workspace.favorite(core, db, user, doc, data)
         if action in ('issues','issue-reply','issue-state'):
             return review_issues.route(core,db,user,doc,action,method,data)
         if action in ('opinion','resolve','evaluate','comments','comment-settings'):
@@ -477,6 +494,7 @@ def route(db, user, method, path, query, data):
             result['cycle'] = lifecycle.settings(db, doc_id)
             result['can_manage'] = accounts.manages(db,dict(user),doc)
             result['discussion_enabled'] = accounts.discussion(db,doc_id)
+            result['favorite'] = bool(db.execute('SELECT 1 FROM favorites WHERE user_id=? AND doc_id=?', (user['id'], doc_id)).fetchone())
             result['issues'] = review_issues.listing(db,doc_id)
             archive_row = db.execute('SELECT a.archived_at,a.note,u.username AS archived_by FROM branch_archives a JOIN users u ON u.id=a.archived_by WHERE a.doc_id=? AND a.restored_at IS NULL', (doc_id,)).fetchone()
             result['archive'] = dict(archive_row) if archive_row else None
@@ -622,16 +640,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             path = parsed.path
+            if method == 'GET' and path in ('/legal/terms', '/legal/privacy', '/help'):
+                return self.send(200, content_pages.page({'/legal/terms':'terms','/legal/privacy':'privacy','/help':'guide'}[path]), 'text/html; charset=utf-8')
+            if method == 'GET' and path == '/api/policies':
+                return self.send(200, content_pages.metadata())
             if method == 'GET' and path == '/healthz':
                 with connection() as db:
                     db.execute('SELECT 1')
                 if os.environ.get('REDIS_URL'):
                     shared_cache.client().ping()
                 return self.send(200, {'ok': True})
-            if method == 'GET' and path in ('/', '/app.js', '/style.css', '/collab.js', '/office.js','/captcha.html','/captcha.js'):
-                filename = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/collab.js': 'collab.js', '/office.js': 'office.js','/captcha.html':'captcha.html','/captcha.js':'captcha.js'}[path]
-                mime = {'/': 'text/html', '/app.js': 'text/javascript', '/style.css': 'text/css', '/collab.js': 'text/javascript', '/office.js': 'text/javascript','/captcha.html':'text/html','/captcha.js':'text/javascript'}[path]
-                return self.send(200, (ROOT / 'web' / filename).read_bytes(), mime + '; charset=utf-8')
+            if method == 'GET' and path in ('/', '/app.js', '/style.css', '/collab.js', '/office.js','/captcha.html','/captcha.js','/onboarding.js','/logo.png'):
+                filename = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/collab.js': 'collab.js', '/office.js': 'office.js','/captcha.html':'captcha.html','/captcha.js':'captcha.js','/onboarding.js':'onboarding.js','/logo.png':'logo.png'}[path]
+                mime = {'/': 'text/html', '/app.js': 'text/javascript', '/style.css': 'text/css', '/collab.js': 'text/javascript', '/office.js': 'text/javascript','/captcha.html':'text/html','/captcha.js':'text/javascript','/onboarding.js':'text/javascript','/logo.png':'image/png'}[path]
+                return self.send(200, (ROOT / 'web' / filename).read_bytes(), mime if path=='/logo.png' else mime + '; charset=utf-8')
             data = {}
             if method == 'POST':
                 # Custom header + no CORS prevents cross-site state-changing requests.
@@ -659,16 +681,25 @@ class Handler(BaseHTTPRequestHandler):
                 if path in ('/api/phone/send-code','/api/phone/verify') and method == 'POST':
                     uid=shared_cache.user_id(db,token)
                     if path.endswith('/send-code'):
+                        if data.get('purpose', 'login') != 'bind':
+                            content_pages.require_acceptance(sys.modules[__name__], data)
                         key='sms:'+phone_auth.client_ip(self.client_address[0],self.headers)
                         if shared_cache.limited(self.server.attempts,key,20):
                             raise Error('请求过于频繁，请稍后重试',429)
                         result=phone_auth.send(sys.modules[__name__],db,data,phone_auth.client_ip(self.client_address[0],self.headers),uid)
                         return self.send(200,result)
+                    challenge = db.execute('SELECT purpose FROM sms_challenges WHERE id=?', (str(data.get('challenge_id','')),)).fetchone()
+                    binding = challenge and challenge['purpose'] == 'bind'
+                    if not binding:
+                        content_pages.require_acceptance(sys.modules[__name__], data)
                     result=phone_auth.verify(sys.modules[__name__],db,data,uid)
                     if result['status']!=200:
                         return self.send(result['status'],{'error':result['error']})
+                    if not binding:
+                        content_pages.record(sys.modules[__name__], db, result['user_id'], 'sms')
                     return self.send(200,{'ok':True},headers={'Set-Cookie':'session='+result['token']+'; HttpOnly; SameSite=Strict; Path=/'+('; Secure' if os.environ.get('STANDARD_COOKIE_SECURE')=='1' else '')})
                 if path == '/api/login' and method == 'POST':
+                    content_pages.require_acceptance(sys.modules[__name__], data)
                     key = 'login:'+phone_auth.client_ip(self.client_address[0],self.headers)
                     if shared_cache.limited(self.server.attempts,key,15):
                         raise Error('登录尝试过多，请 5 分钟后重试', 429)
@@ -677,6 +708,7 @@ class Handler(BaseHTTPRequestHandler):
                     stored = account['password'] if account else password_hash('dummy')
                     if not hmac.compare_digest(password_hash(password, stored.split(':')[0]), stored) or not account:
                         raise Error('账号或密码错误', 401)
+                    content_pages.record(sys.modules[__name__], db, account['id'], 'password')
                     token = secrets.token_urlsafe(32)
                     db.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
                     shared_cache.create(db,token,account['id'],time.time()+8*3600)

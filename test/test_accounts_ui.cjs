@@ -1,13 +1,15 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawn,spawnSync}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'account-ui-')),db=path.join(tmp,'db.sqlite'),base='http://127.0.0.1:18769',python=process.env.PYTHON_EXECUTABLE||'python';
- const child=spawn(python,['-u','server.py','--port','18769'],{cwd:__dirname,env:{...process.env,STANDARD_DB:db,STANDARD_ADMIN_PASSWORD:'account-ui-password',STANDARD_TENCENT_AUTH_CONFIG:path.join(tmp,'no-config.json')},stdio:'ignore',windowsHide:true});let browser;
+ const child=spawn(python,['-u','server.py','--port','18769'],{cwd:projectRoot,env:{...process.env,STANDARD_DB:db,STANDARD_ADMIN_PASSWORD:'account-ui-password',STANDARD_TENCENT_AUTH_CONFIG:path.join(tmp,'no-config.json')},stdio:'ignore',windowsHide:true});let browser;
  try{
   for(let i=0;i<100;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
   browser=await chromium.launch({headless:true,channel:'msedge'});const admin=await browser.newContext({viewport:{width:1600,height:1100}}),member=await browser.newContext();
-  async function api(ctx,url,data){const r=data?await ctx.request.post(base+'/api/'+url,{data,headers:{'X-Requested-With':'StandardsPlatform'}}):await ctx.request.get(base+'/api/'+url);assert(r.ok(),await r.text());return r.json()}
+  async function api(ctx,url,data){if(url==='login')data={...data,...await(await ctx.request.get(base+'/api/policies')).json(),accepted:true};const r=data?await ctx.request.post(base+'/api/'+url,{data,headers:{'X-Requested-With':'StandardsPlatform'}}):await ctx.request.get(base+'/api/'+url);assert(r.ok(),await r.text());if(url==='login')await ctx.request.post(base+'/api/onboarding',{data:{state:'skipped'},headers:{'X-Requested-With':'StandardsPlatform'}});return r.json()}
   await api(admin,'login',{username:'admin',password:'account-ui-password'});await api(admin,'users',{username:'member',phone:'13800138001',role:'reader',password:'account-ui-password'});
   const seeded=spawnSync(python,['-c',"import sqlite3,sys\ndb=sqlite3.connect(sys.argv[1]);db.execute(\"UPDATE users SET phone='13800138001',phone_verified=1 WHERE username='member'\");db.commit()",db],{encoding:'utf8'});assert.equal(seeded.status,0,seeded.stderr);
   await api(member,'login',{username:'13800138001',password:'account-ui-password'});
@@ -18,7 +20,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   const mp=await member.newPage();await mp.goto(base);await mp.getByRole('link',{name:'Phone permission UI',exact:true}).click();await mp.getByRole('button',{name:'权限管理',exact:true}).waitFor();await mp.getByRole('button',{name:'进入公开',exact:true}).waitFor();assert.equal((await api(member,'me')).role,'reader');
   await mp.getByRole('button',{name:'评审意见',exact:true}).click();await mp.getByRole('button',{name:'新建评审事项',exact:true}).click();await mp.locator('input[name="title"]').fill('UI review issue');await mp.locator('textarea[name="body"]').fill('UI comment retained after pausing');await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});
   await mp.locator('[data-issue-back]').click();await mp.getByRole('button',{name:'暂停讨论',exact:true}).click();await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});assert(await mp.getByRole('button',{name:'新建评审事项',exact:true}).isDisabled());await mp.getByRole('button',{name:'UI review issue',exact:true}).click();await mp.getByText('UI comment retained after pausing',{exact:true}).waitFor();
-  await mp.screenshot({path:path.join(__dirname,'data/comments-permissions-ui.png'),fullPage:true});
+  await mp.screenshot({path:path.join(projectRoot,'data/comments-permissions-ui.png'),fullPage:true});
   await mp.locator('[data-issue-back]').click();await mp.getByRole('button',{name:'开放讨论',exact:true}).click();await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});await mp.getByRole('button',{name:'UI review issue',exact:true}).click();
   await mp.getByRole('button',{name:'回复',exact:true}).click();await mp.locator('textarea[name="body"]').fill('Reply and evidence');await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});await mp.getByText('Reply and evidence',{exact:true}).waitFor();
   await mp.getByRole('button',{name:'关闭事项',exact:true}).click();await mp.locator('textarea[name="body"]').fill('Accepted and resolved');await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});await mp.getByRole('button',{name:'重新打开',exact:true}).click();await mp.locator('textarea[name="body"]').fill('Need additional checks');await mp.getByRole('button',{name:'确认',exact:true}).click();await mp.locator('#modal').waitFor({state:'hidden'});await mp.getByText('重新打开了此事项',{exact:true}).waitFor();

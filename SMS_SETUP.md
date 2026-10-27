@@ -42,10 +42,10 @@
 ## 验证
 
 ```powershell
-..\.venv\Scripts\python.exe -m unittest discover -v
-node test_phone_login_ui.cjs
-node test_accounts_ui.cjs
-node test_lifecycle_ui.cjs
+..\.venv\Scripts\python.exe -m unittest discover -s test -t . -v
+node test/test_phone_login_ui.cjs
+node test/test_accounts_ui.cjs
+node test/test_lifecycle_ui.cjs
 ```
 
 自动化发送测试使用明确的云接口夹具，不向真实号码发短信。已使用正式配置请求腾讯云图形票据核验API，确认可达并拒绝无效票据；实际短信接收和完整人工图形挑战需用用户本人手机号操作网页登录页验证。

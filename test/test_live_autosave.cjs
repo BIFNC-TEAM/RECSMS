@@ -1,3 +1,5 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 // Real ONLYOFFICE integration: creates one clearly-labelled test document.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict'),path=require('node:path');
@@ -19,9 +21,9 @@ const assert=require('node:assert/strict'),path=require('node:path');
   assert.equal(saved.session.state,'editing');assert(saved.last_saved_at);assert.equal(saved.autosave_seconds,5);assert.equal(saved.versions.length,1);
   const download=await ctx.request.get(base+'/api/download?doc_id='+id+'&working=1');assert(download.ok());assert.equal((await download.body())[0],0x50);
   await ctx.setOffline(true);await page.waitForFunction(()=>document.querySelector('#office-status')?.textContent.includes('网络已断开'));
-  await page.screenshot({path:path.join(__dirname,'data/autosave-offline-status.png'),fullPage:true});
+  await page.screenshot({path:path.join(projectRoot,'data/autosave-offline-status.png'),fullPage:true});
   await ctx.setOffline(false);await page.waitForFunction(()=>document.querySelector('#office-status')?.textContent.includes('上次保存'),null,{timeout:15000});
-  await page.screenshot({path:path.join(__dirname,'data/autosave-live-status.png'),fullPage:true});
+  await page.screenshot({path:path.join(projectRoot,'data/autosave-live-status.png'),fullPage:true});
   await page.getByRole('button',{name:'关闭编辑',exact:true}).click();await page.locator('.office-dialog').waitFor({state:'detached',timeout:90000});
   const final=await api('documents/'+id);assert(final.versions[0].body.includes(marker));assert.equal(final.session,null);
   console.log('PASS: real editor saved while still open; durable working download, offline warning, reconnect, final snapshot. Test document id='+id);

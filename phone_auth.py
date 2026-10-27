@@ -189,7 +189,7 @@ def verify(core,db,data,user_id=None):
     core.audit(db,account,'短信手机号验证',detail=row['phone'][:3]+'****'+row['phone'][-4:])
     token=secrets.token_urlsafe(32)
     shared_cache.create(db,token,uid,time.time()+8*3600)
-    return {'token':token,'status':200}
+    return {'token':token,'status':200,'user_id':uid}
 
 
 def clear_ephemeral(db):

@@ -1,3 +1,5 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 // Explicit protocol/UI fixture. This does NOT run or simulate the actual ONLYOFFICE editing engine.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawn,spawnSync}=require('node:child_process');
@@ -7,7 +9,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'office-browser-'));
   const python=process.env.PYTHON_EXECUTABLE||'python',secret='ui-protocol-fixture-secret-at-least-32-characters';
   const fixture=path.join(temp,'edited.docx');
-  const made=spawnSync(python,['-c','import onlyoffice,sys;from pathlib import Path;Path(sys.argv[1]).write_bytes(onlyoffice.make_docx("Office 浏览器保存验证"))',fixture],{cwd:__dirname});
+  const made=spawnSync(python,['-c','import onlyoffice,sys;from pathlib import Path;Path(sys.argv[1]).write_bytes(onlyoffice.make_docx("Office 浏览器保存验证"))',fixture],{cwd:projectRoot});
   assert.equal(made.status,0,made.stderr.toString());
   const base='http://127.0.0.1:18766';let child,browser,docsURL;const sessions=new Map(),callbackErrors=[];
   function sign(payload){const value=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({payload,operation:'callback'})).toString('base64url');return value+'.'+crypto.createHmac('sha256',secret).update(value).digest('base64url')}
@@ -36,7 +38,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
   });
   await new Promise(r=>fake.listen(0,'127.0.0.1',r));docsURL='http://127.0.0.1:'+fake.address().port;
   try{
-    child=spawn(python,['-u',path.join(__dirname,'server.py'),'--port','18766'],{env:{...process.env,STANDARD_DB:path.join(temp,'office.db'),STANDARD_ADMIN_PASSWORD:'office-browser-password',ONLYOFFICE_PUBLIC_URL:docsURL,ONLYOFFICE_INTERNAL_URL:docsURL,ONLYOFFICE_PLATFORM_URL:base,ONLYOFFICE_JWT_SECRET:secret},stdio:'ignore',windowsHide:true});
+    child=spawn(python,['-u',path.join(projectRoot,'server.py'),'--port','18766'],{env:{...process.env,STANDARD_DB:path.join(temp,'office.db'),STANDARD_ADMIN_PASSWORD:'office-browser-password',ONLYOFFICE_PUBLIC_URL:docsURL,ONLYOFFICE_INTERNAL_URL:docsURL,ONLYOFFICE_PLATFORM_URL:base,ONLYOFFICE_JWT_SECRET:secret},stdio:'ignore',windowsHide:true});
     let ready=false;for(let i=0;i<80;i++){try{if((await fetch(base)).ok){ready=true;break}}catch{}await wait(100)}assert(ready);
     browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
     const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -57,7 +59,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
     assert.equal(await page.getByRole('button',{name:'保存 Office 新版本',exact:true}).count(),0);
     await page.getByText('Office 浏览器保存验证',{exact:true}).first().waitFor();
     assert.deepEqual(await page.locator('.document-control-buttons button').allTextContents(),['提交文档','分享协作','刷新','删除版本']);
-    assert.equal(await page.locator('.editing-status').innerText(),'已完成');fs.mkdirSync(path.join(__dirname,'data'),{recursive:true});await page.screenshot({path:path.join(__dirname,'data/ui-autosave.png'),fullPage:true});
+    assert.equal(await page.locator('.editing-status').innerText(),'已完成');fs.mkdirSync(path.join(projectRoot,'data'),{recursive:true});await page.screenshot({path:path.join(projectRoot,'data/ui-autosave.png'),fullPage:true});
     assert((await page.locator('.body-text').innerText()).includes('Office 浏览器保存验证'));
     assert.equal(await page.getByRole('button',{name:'实时协作',exact:true}).count(),0);
     const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'下载文档',exact:true}).click();assert((await downloadPromise).suggestedFilename().endsWith('.docx'));

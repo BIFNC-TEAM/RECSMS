@@ -1,3 +1,5 @@
+const projectRoot=require('node:path').resolve(__dirname,'..');
+process.chdir(projectRoot);
 // Explicit live integration check. Creates a clearly labelled test document and test editor.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const {spawnSync}=require('node:child_process');
@@ -23,9 +25,9 @@ with server.connection() as db:
   token=secrets.token_urlsafe(32);tokens[name]=token
   db.execute('INSERT INTO sessions VALUES(?,?,?)',(token,user['id'],time.time()+1800))
  server.audit(db,admin,'ONLYOFFICE 真实联调会话')
- print(json.dumps(tokens))`],{cwd:__dirname,encoding:'utf8'});
+ print(json.dumps(tokens))`],{cwd:projectRoot,encoding:'utf8'});
   if(setup.status)throw Error(setup.stderr);
-  const tokens=JSON.parse(setup.stdout),statePath=path.join(__dirname,'data/live-office-test.json');
+  const tokens=JSON.parse(setup.stdout),statePath=path.join(projectRoot,'data/live-office-test.json');
   const browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
   try{
     const ctx=await browser.newContext({viewport:{width:1440,height:1000}});
@@ -44,7 +46,7 @@ with server.connection() as db:
     console.log('Frames:',page.frames().map(f=>f.url().split('?')[0]));
     const frame=page.frames().find(f=>f.url().includes('/documenteditor/'));
     if(frame)console.log('Text input IDs:',await frame.locator('textarea,[contenteditable]').evaluateAll(els=>els.map(e=>({tag:e.tagName,id:e.id,cls:e.className}))));
-    await page.screenshot({path:path.join(__dirname,'data/onlyoffice-live.png'),fullPage:true});
+    await page.screenshot({path:path.join(projectRoot,'data/onlyoffice-live.png'),fullPage:true});
     if(process.env.OFFICE_LIVE_INSPECT==='1')return;
     if(!frame)throw Error('Real document editor iframe missing');
     const invitation=await request(`documents/${id}/shares`,{});
@@ -64,7 +66,7 @@ with server.connection() as db:
     await adminPage.bringToFront();await adminFrame.locator('#area_id').focus();await adminPage.waitForTimeout(500);await adminPage.keyboard.press('Control+End');await adminPage.waitForTimeout(200);await adminPage.keyboard.press('Enter');await adminPage.waitForTimeout(400);await adminPage.keyboard.insertText(adminText);
     await adminPage.waitForTimeout(1500);
     let periodicallySaved=false;for(let i=0;i<35;i++){const working=await request('documents/'+id);if(working.working_body?.includes(writerText)&&working.working_body?.includes(adminText)){periodicallySaved=true;break}await page.waitForTimeout(1500)}assert(periodicallySaved,'periodic autosave did not return both users edits while the editors stayed open');console.log('Periodic autosave received while both editors remain open.');
-    await page.screenshot({path:path.join(__dirname,'data/onlyoffice-live-collaboration.png'),fullPage:true});
+    await page.screenshot({path:path.join(projectRoot,'data/onlyoffice-live-collaboration.png'),fullPage:true});
     await page.getByRole('button',{name:'关闭编辑并等待保存',exact:true}).click();
     await adminPage.getByRole('button',{name:'关闭编辑并等待保存',exact:true}).click();
     await page.locator('.office-dialog').waitFor({state:'detached',timeout:90000});
@@ -85,11 +87,11 @@ with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as z:
  ns={'w':'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
  authors={e.get('{'+ns['w']+'}author') for e in root.findall('.//w:ins',ns)}
  assert 'office_validation_editor' in authors, 'Shared editor modifications must be tracked suggestions'
- print('Tracked insertion authors verified')`],{cwd:__dirname,input:bytes});
+ print('Tracked insertion authors verified')`],{cwd:projectRoot,input:bytes});
     assert.equal(revisions.status,0,revisions.stderr.toString());
     console.log(revisions.stdout.toString().trim());
     console.log('PASS: real ONLYOFFICE owner + link-invited collaborator editing, creator-only submission UI, automatic final archival, preserved DOCX. Document ID:',id);
   }finally{await browser.close();spawnSync(python,['-c',`import server,sys
 with server.connection() as db:
- for token in sys.argv[1:]:db.execute('DELETE FROM sessions WHERE token=?',(token,))`,tokens.admin,tokens.editor,tokens.collaborator],{cwd:__dirname})}
+ for token in sys.argv[1:]:db.execute('DELETE FROM sessions WHERE token=?',(token,))`,tokens.admin,tokens.editor,tokens.collaborator],{cwd:projectRoot})}
 })().catch(e=>{console.error(e);process.exitCode=1});
