@@ -1,4 +1,6 @@
-# 标准文件协作与版本管理平台
+# 机器人与国产操作系统标准文件协作编辑及版本管理平台
+
+Robot Evaluation Center Standards Management System
 
 ## 品牌、新手教程和测试目录
 
