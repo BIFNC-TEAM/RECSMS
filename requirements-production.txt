@@ -1,0 +1,4 @@
+-r requirements-auth.txt
+psycopg[binary]==3.2.13
+redis==5.0.8
+cos-python-sdk-v5==1.9.44

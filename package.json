@@ -1,0 +1,8 @@
+{
+  "name": "standards-collaboration",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {"build": "esbuild collab-client.js --bundle --format=iife --global-name=StandardsCollab --outfile=web/collab.js"},
+  "dependencies": {"yjs": "13.6.27"},
+  "devDependencies": {"esbuild": "0.25.12"}
+}

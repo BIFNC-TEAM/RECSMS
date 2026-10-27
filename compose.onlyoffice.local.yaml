@@ -1,0 +1,17 @@
+# Runs ONLYOFFICE alongside the existing native platform, preserving its current database.
+services:
+  documentserver:
+    image: onlyoffice/documentserver:10.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:?Run configure_local_office.py first}
+      JWT_HEADER: Authorization
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    volumes:
+      - ./data/onlyoffice/data:/var/www/onlyoffice/Data
+      - ./data/onlyoffice/logs:/var/log/onlyoffice
+      - ./data/onlyoffice/state:/var/lib/onlyoffice
+    shm_size: 1gb
