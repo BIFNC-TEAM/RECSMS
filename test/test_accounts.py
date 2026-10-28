@@ -60,8 +60,8 @@ class AccountsTest(unittest.TestCase):
         self.assert_error(403,self.call,self.manager,'users',{'username':'forbidden','phone':'13700000002','password':'accounts-test-password','role':'admin'})
         self.action(self.manager,'transition',target='draft',note='返回编辑')
         self.action(self.owner,'members',phone='13800138001',permission='remove')
-        self.assert_error(403,self.doc,self.editor)
-        self.assert_error(403,self.action,self.editor,'office-open')
+        self.assertFalse(self.doc(self.editor)['can_edit'])
+        self.assert_error(403,server.document,self.db,self.editor,self.id,True)
 
     def test_pending_phone_verification_uniqueness_and_comments(self):
         self.db.execute('UPDATE users SET phone_verified=0 WHERE id=?',(self.editor['id'],))

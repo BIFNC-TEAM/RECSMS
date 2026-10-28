@@ -1,14 +1,7 @@
-"""Standard-system directory seed and private document bookmarks."""
+"""Fixed, flat standard categories and account-scoped workspace settings."""
+import json
 
-TAXONOMY = {
-    '基础通用标准': ['术语与定义', '标准体系与编制规则', '分类编码与元数据'],
-    '机器人标准': ['体系架构与接口', '控制与通信', '功能安全与信息安全', '性能与可靠性'],
-    '国产操作系统标准': ['系统基础与运行环境', '驱动与硬件支持', '安全配置与权限', '软件安装与部署'],
-    '适配与互操作标准': ['处理器架构适配', '机器人与操作系统适配', '接口与协议互操作', '应用迁移与兼容性'],
-    '测试与评价标准': ['测试方法与测试用例', '性能与稳定性测试', '安全测试与评价', '兼容性验证与验收'],
-    '编制评审与发布材料': ['编制说明与征求意见', '评审记录与意见处理', '发布与废止替代材料'],
-    '参考与配套资料': ['引用标准与参考文献', '图表与样例数据', '操作指南与模板'],
-}
+TAXONOMY = ('基础通用标准', '机器人标准', '国产操作系统标准', '适配与互操作标准', '测试与评价标准', '编制评审与发布材料', '参考与配套资料')
 
 
 def init(core, db):
@@ -17,17 +10,54 @@ def init(core, db):
     CREATE TABLE IF NOT EXISTS favorites(user_id INTEGER REFERENCES users(id),doc_id INTEGER REFERENCES documents(id),created TEXT NOT NULL,PRIMARY KEY(user_id,doc_id));
     CREATE TABLE IF NOT EXISTS user_onboarding(user_id INTEGER PRIMARY KEY REFERENCES users(id),state TEXT NOT NULL CHECK(state IN ('done','skipped')),updated TEXT NOT NULL);
     ''')
-    if db.execute("SELECT 1 FROM workspace_migrations WHERE key='taxonomy-v1'").fetchone():
+    if db.execute("SELECT 1 FROM workspace_migrations WHERE key='flat-directories-v2'").fetchone():
         return
-    root = db.execute("SELECT id FROM directories WHERE name='标准文件' AND parent_id IS NULL ORDER BY id LIMIT 1").fetchone()
-    root_id = root['id'] if root else db.execute('INSERT INTO directories(name) VALUES(?)', ('标准文件',)).lastrowid
-    for name, children in TAXONOMY.items():
-        parent = db.execute('SELECT id FROM directories WHERE parent_id=? AND name=? ORDER BY id LIMIT 1', (root_id, name)).fetchone()
-        parent_id = parent['id'] if parent else db.execute('INSERT INTO directories(name,parent_id) VALUES(?,?)', (name, root_id)).lastrowid
-        for child in children:
-            if not db.execute('SELECT 1 FROM directories WHERE parent_id=? AND name=?', (parent_id, child)).fetchone():
-                db.execute('INSERT INTO directories(name,parent_id) VALUES(?,?)', (child, parent_id))
-    db.execute("INSERT INTO workspace_migrations VALUES('taxonomy-v1')")
+    old = {r['id']: dict(r) for r in db.execute('SELECT * FROM directories ORDER BY id')}
+    root = next((r for r in old.values() if r['name']=='标准文件' and r['parent_id'] is None), None)
+    categories = {}
+    for name in TAXONOMY:
+        existing = root if name==TAXONOMY[0] and root else next((r for r in old.values() if r['name']==name), None)
+        cid = existing['id'] if existing else db.execute('INSERT INTO directories(name) VALUES(?)', (name,)).lastrowid
+        db.execute('UPDATE directories SET name=?,parent_id=NULL WHERE id=?', (name, cid))
+        categories[name] = cid
+    mapping = {}
+    for original in old:
+        current, seen, category = original, set(), TAXONOMY[0]
+        while current in old and current not in seen:
+            seen.add(current)
+            if old[current]['name'] in categories:
+                category = old[current]['name']; break
+            current = old[current]['parent_id']
+        mapping[original] = categories[category]
+    directory_grants = {}
+    for row in db.execute("SELECT * FROM grants WHERE scope='directory'"):
+        directory_grants.setdefault(row['target_id'], []).append(dict(row))
+    documents = db.execute('SELECT id,owner_id,directory_id FROM documents').fetchall()
+    for doc in documents:
+        current, seen, restrictions = doc['directory_id'], set(), []
+        while current in old and current not in seen:
+            seen.add(current)
+            if current in directory_grants:
+                restrictions.append({g['user_id'] for g in directory_grants[current] if g['access']=='edit' and g['user_id'] is not None})
+            current = old[current]['parent_id']
+        if restrictions:
+            # Preserve the effective edit ACL before merging directory scopes. Read access is now shared.
+            allowed = set.intersection(*restrictions)
+            explicit = db.execute("SELECT user_id,access FROM grants WHERE scope='document' AND target_id=?", (doc['id'],)).fetchall()
+            if explicit:
+                allowed &= {g['user_id'] for g in explicit if g['access']=='edit'}
+            db.execute("UPDATE grants SET access='read' WHERE scope='document' AND target_id=?", (doc['id'],))
+            for uid in sorted(allowed):
+                db.execute("INSERT INTO grants(scope,target_id,user_id,access) VALUES('document',?,?,'edit') ON CONFLICT(scope,target_id,user_id) DO UPDATE SET access='edit'", (doc['id'], uid))
+            if not explicit and not allowed:
+                db.execute("INSERT OR IGNORE INTO grants(scope,target_id,user_id,access) VALUES('document',?,?,'read')", (doc['id'], doc['owner_id']))
+        db.execute('UPDATE documents SET directory_id=? WHERE id=?', (mapping.get(doc['directory_id'], categories[TAXONOMY[0]]), doc['id']))
+    db.execute("DELETE FROM grants WHERE scope='directory'")
+    db.execute('UPDATE directories SET parent_id=NULL')
+    db.execute('DELETE FROM directories WHERE id NOT IN ('+','.join('?' for _ in categories)+')', tuple(categories.values()))
+    db.execute("INSERT OR IGNORE INTO workspace_migrations VALUES('taxonomy-v1')")
+    db.execute("INSERT INTO workspace_migrations VALUES('flat-directories-v2')")
+    core.audit(db, {'username':'system'}, '简化标准体系目录', detail=json.dumps({'categories':list(TAXONOMY),'documents':len(documents),'previous':{str(i):{'name':r['name'],'parent_id':r['parent_id'],'category_id':mapping[i]} for i,r in old.items()}}, ensure_ascii=False))
 
 
 def favorite(core, db, user, doc, data):

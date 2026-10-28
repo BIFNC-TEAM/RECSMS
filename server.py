@@ -131,6 +131,8 @@ def document(db, user, doc_id, write=False):
     doc = db.execute('SELECT d.*,EXISTS(SELECT 1 FROM branch_archives a WHERE a.doc_id=d.id AND a.restored_at IS NULL) AS is_archived FROM documents d WHERE d.id=?', (doc_id,)).fetchone()
     if not doc or db.execute('SELECT 1 FROM deleted_documents WHERE doc_id=?', (doc_id,)).fetchone():
         raise Error('文档不存在', 404)
+    if not write:
+        return doc  # Every authenticated account can read documents; write checks remain below.
     if write and db.execute('SELECT 1 FROM legacy_materials WHERE doc_id=?', (doc_id,)).fetchone():
         raise Error('旧流程资料仅保留查阅，请在统一在编稿中编辑', 409)
     if write and doc['state'] not in ('draft', 'public'):
@@ -148,9 +150,6 @@ def document(db, user, doc_id, write=False):
         raise Error('文档邀请已撤销',403)
     if scoped:
         return doc
-    shared = db.execute('SELECT 1 FROM share_members m JOIN share_links s ON s.id=m.link_id WHERE m.user_id=? AND s.doc_id=? AND s.revoked=0', (user['id'], doc['id'])).fetchone()
-    if shared and not write:
-        return doc  # An explicit invitation authorizes this document, never its directory or siblings.
     if write and user['role'] != 'editor':
         raise Error('需要起草角色', 403)
     # Explicit ACLs restrict access; absent ACLs are shared with authenticated users.
@@ -305,6 +304,8 @@ def route(db, user, method, path, query, data):
         return workspace.finish_onboarding(core, db, user, data)
     if path == '/api/help' and method == 'GET':
         return {'html': content_pages.fragment('guide')}
+    if path in ('/api/admin-users/search', '/api/admin-users') and method == 'POST':
+        return accounts.administrator(core, db, user, path.endswith('/search'), data)
     if path == '/api/users':
         if method == 'POST':
             require_role(user, 'admin')
@@ -324,19 +325,7 @@ def route(db, user, method, path, query, data):
     if path == '/api/directories':
         if method == 'POST':
             require_role(user, 'admin')
-            parent = data.get('parent_id') or None
-            if parent and not db.execute('SELECT 1 FROM directories WHERE id=?', (parent,)).fetchone():
-                raise Error('父目录不存在')
-            if data.get('id'):
-                ancestor = parent
-                while ancestor:
-                    if int(ancestor) == int(data['id']):
-                        raise Error('目录不能移动到自身或下级目录')
-                    ancestor = db.execute('SELECT parent_id FROM directories WHERE id=?', (ancestor,)).fetchone()['parent_id']
-                db.execute('UPDATE directories SET name=?,parent_id=? WHERE id=?', (required(data, 'name', 100), parent, data['id']))
-            else:
-                db.execute('INSERT INTO directories(name,parent_id) VALUES(?,?)', (required(data, 'name', 100), parent))
-            audit(db, user, '新增目录', detail=data['name'])
+            raise Error('目录已固定为单层分类，不再提供目录管理',410)
         return [dict(r) for r in db.execute('SELECT * FROM directories ORDER BY id')]
     if path == '/api/todos':
         if method == 'POST':

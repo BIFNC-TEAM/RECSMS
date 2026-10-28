@@ -2,13 +2,13 @@
 window.StandardsOnboarding=(()=>{
  let current=null;
  const steps=[
-  {title:'先认一下这个页面',text:'标准文件都在“标准文档库”里。我们花半分钟看几个常用的地方，以后找文件、改文档会顺手些。'},
-  {title:'找文件，从这里开始',text:'可以搜标准编号、名称，也可以搜正文里的词。文件多时，再选状态、负责人或日期，就不用逐页翻了。',target:'#search'},
-  {title:'常用的文件，点一下星标',text:'收藏后，文件会出现在“我的收藏”里。这里存的是入口，不会多存一份文件，权限也不会变。',target:'[data-page="favorites"]'},
-  {title:'大家改的是同一份稿子',text:'打开文档后，点“编辑文档”。有编辑权限的人会进入同一份在编稿，修改有修订记录，也会自动保存，不用互相传文件。'},
-  {title:'发布前，先过公开评审',text:'文档先共同编辑，再进入公开评审。意见处理完、当前稿件批准后才能发布。发布稿会保留下来，下次修改再开新一轮。',flow:true},
-  {title:'需要你处理的事，在这里看',text:'评审、退回和发布的提醒会出现在“我的待办”。文档里的问题请写成一条评审意见，处理完再关闭，别人也能看懂改了什么。',target:'[data-page="todos"]'},
-  {title:'想再看一遍，来这里',text:'“使用说明”里有完整流程，也能重新打开这份教程。现在可以开始找文件了。',target:'[data-page="guide"]'}
+  {title:'浏览标准文档',text:'在“标准文档库”中查看文档及当前状态。打开文档后，可查看正文、附件、历史版本和评审意见。'},
+  {title:'检索文档',text:'输入标准编号、名称或正文关键词，点击“检索”。可结合状态、标签、负责人和日期缩小检索范围。',target:'#search'},
+  {title:'收藏文档',text:'点击文档列表或详情页的星标，将文档加入“我的收藏”。再次点击星标可取消收藏。',target:'[data-page="favorites"]'},
+  {title:'协作编辑',text:'在编辑阶段，拥有权限的用户可通过“编辑文档”共同修订同一份稿件。系统保留修订记录并自动保存。'},
+  {title:'评审与发布',text:'文档按“编辑—公开—发布”流转。公开阶段完成评审意见处理和稿件批准后，方可发布。发布版本只读保留。',flow:true},
+  {title:'查看待办',text:'在“我的待办”查看评审、退回和发布通知。评审问题在文档的“评审意见”中提交、回复和关闭。',target:'[data-page="todos"]'},
+  {title:'使用说明',text:'在“使用说明”中查阅状态流转、协作编制和版本管理流程。需要时，可重新查看新手教程。',target:'[data-page="guide"]'}
  ];
  function close(){if(!current)return;window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);current.dialog.close();current.dialog.remove();current.focus.remove();current=null;}
  function place(){
@@ -38,7 +38,7 @@ window.StandardsOnboarding=(()=>{
   if(!current||current.saving)return;current.saving=true;
   const entry=current;for(const button of entry.dialog.querySelectorAll('button'))button.disabled=true;
   try{const result=await entry.api('onboarding',{state});entry.onFinish(result.state);close();}
-  catch{if(current===entry){entry.dialog.querySelector('.tour-error').textContent='刚才没保存成功，请再试一次。';entry.saving=false;for(const button of entry.dialog.querySelectorAll('button'))button.disabled=false;place();}}
+  catch{if(current===entry){entry.dialog.querySelector('.tour-error').textContent='教程进度保存失败，请重试。';entry.saving=false;for(const button of entry.dialog.querySelectorAll('button'))button.disabled=false;place();}}
  }
  function open({api,onFinish}){
   if(current)return;

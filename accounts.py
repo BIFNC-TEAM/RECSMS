@@ -82,3 +82,21 @@ def notify_invites(core,db,uid,number):
         message='已加入受邀文档：'+invitation['title']
         if not db.execute('SELECT 1 FROM todos WHERE user_id=? AND doc_id=? AND message=?',(uid,invitation['id'],message)).fetchone():
             db.execute('INSERT INTO todos(user_id,doc_id,message,created) VALUES(?,?,?,?)',(uid,invitation['id'],message,core.now()))
+
+
+def administrator(core, db, user, search, data):
+    core.require_role(user, 'admin')
+    number = phone(core, data.get('phone'))
+    row = db.execute('SELECT id,username,phone,phone_verified,role FROM users WHERE phone=?', (number,)).fetchone()
+    if search:
+        return {'user': dict(row) if row else None}
+    if not row:
+        raise core.Error('未找到该手机号对应的已注册用户',404)
+    if type(data.get('user_id')) is not int or data['user_id'] != row['id']:
+        raise core.Error('用户信息已变化，请重新搜索确认',409)
+    if not row['phone_verified']:
+        raise core.Error('该用户尚未完成手机号验证',409)
+    if row['role'] != 'admin':
+        db.execute("UPDATE users SET role='admin' WHERE id=?", (row['id'],))
+        core.audit(db, user, '新增平台管理员', detail='user='+str(row['id'])+'; '+number[:3]+'****'+number[-4:])
+    return {'ok':True,'user':{**dict(row),'role':'admin'}}

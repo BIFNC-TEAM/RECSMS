@@ -28,14 +28,14 @@ class WorkspaceTest(unittest.TestCase):
 
     def test_taxonomy_is_idempotent_and_new_document_defaults_to_blank(self):
         initial=self.call(self.admin,'directories')
-        self.assertEqual(len(initial),1+len(workspace.TAXONOMY)+sum(map(len,workspace.TAXONOMY.values())))
+        self.assertEqual(len(initial),len(workspace.TAXONOMY))
         workspace.init(server,self.db)
         self.assertEqual(self.call(self.admin,'directories'),initial)
         doc=self.call(self.admin,'documents',dict(number='BLANK',title='Empty document',directory_id=1,label='V0.1',note='initial'))
         self.assertEqual(self.call(self.admin,'documents/'+str(doc['id']))['versions'][0]['body'],'')
-        leaf=next(d for d in initial if d['name']=='控制与通信')
+        leaf=next(d for d in initial if d['name']=='机器人标准')
         self.call(self.admin,'documents',dict(number='NESTED',title='Nested',directory_id=leaf['id'],label='V0.1',note='initial'))
-        subtree=self.call(self.admin,'documents',query={'directory_id':str(leaf['parent_id'])})
+        subtree=self.call(self.admin,'documents',query={'directory_id':str(leaf['id'])})
         self.assertEqual([d['number'] for d in subtree],['NESTED'])
 
     def test_favorites_are_personal_idempotent_and_never_bypass_access(self):
@@ -60,10 +60,8 @@ class WorkspaceTest(unittest.TestCase):
         self.assertEqual(self.call(reader,'documents',query={'favorite':'1'}),[])
         self.call(reader,path+'/favorite',{'favorite':True})
         self.call(self.admin,'grants',dict(scope='document',target_id=did,user_id=self.admin['id'],access='read'))
-        self.assertEqual(self.call(reader,'documents',query={'favorite':'1'}),[])
-        with self.assertRaises(server.Error) as result:
-            self.call(reader,path)
-        self.assertEqual(result.exception.status,403)
+        self.assertEqual(len(self.call(reader,'documents',query={'favorite':'1'})),1)
+        self.assertFalse(self.call(reader,path)['can_edit'])
 
     def test_http_consent_gate_and_public_drafts(self):
         self.db.commit()

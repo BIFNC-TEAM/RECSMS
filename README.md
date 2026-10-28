@@ -13,7 +13,9 @@ Robot Evaluation Center Standards Management System
 
 手机号/原密码使用标签切换，登录须主动勾选两份法律文本，服务端验证版本并记录草案确认。
 服务协议及隐私政策按用户要求暂为预览草案，运营主体等事实待补，不作为已完成法定告知的正式政策；详见 [LEGAL_REVIEW.md](LEGAL_REVIEW.md)。
-默认建议目录共33项（根目录、7类及25个子目录），首次迁移添加，不覆盖已有文档或目录；父目录检索包含子目录。
+默认目录为7个单层分类。升级时自动归并原有子目录，保留文档内容，并将原目录编辑限制转为文档授权。所有已登录用户均可只读查看文档；管理与审计支持按已验证手机号将现有用户设为管理员。
+
+新手教程采用功能标题与操作说明，参考 [Microsoft 分步说明规范](https://learn.microsoft.com/en-us/style-guide/procedures-instructions/writing-step-by-step-instructions)。
 列表与详情页支持个人收藏，工作空间新增“我的收藏”；收藏不会增加文档权限。
 “使用说明”包含状态流转、统一修订、自动保存、评审闭环、历史附件、权限和检索，公开入口 `/help`。
 新建文档默认空白，在 ONLYOFFICE 编辑或从 Word 导入，不再填写正文输入框。
