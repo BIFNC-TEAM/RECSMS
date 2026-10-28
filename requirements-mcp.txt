@@ -1,0 +1,2 @@
+# Official SDK maintenance line; isolate from the web service dependencies.
+mcp>=1.28,<2
