@@ -191,6 +191,9 @@ class LifecycleTest(unittest.TestCase):
         with patch.object(onlyoffice,'ready',return_value=config):
             self.assertEqual(onlyoffice.file(server,self.db,preview_query),content)
         self.assertNotEqual(preview['key'],opened['key'])
+        self.assertEqual(preview['config']['editorConfig']['customization']['review']['reviewDisplay'],'final')
+        self.assertEqual(preview['config']['editorConfig']['customization']['reviewDisplay'],'final')
+        self.assertFalse(preview['writable'])
         self.db.commit()
 
         query={k:v[0] for k,v in parse_qs(urlparse(opened['config']['document']['url']).query).items()}
