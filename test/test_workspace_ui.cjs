@@ -31,6 +31,15 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal(await page.getByRole('heading',{name:'目录',exact:true}).count(),0);
   await page.getByRole('button',{name:'新增管理员',exact:true}).click();assert.equal(await page.locator('#modal input').count(),1);assert.equal(await page.locator('#modal input[type=password]').count(),0);
   await page.getByLabel('用户手机号',{exact:true}).fill('13900000099');await page.getByRole('button',{name:'搜索用户',exact:true}).click();await page.getByText('未找到该手机号对应的已注册用户',{exact:true}).waitFor();assert(await page.getByRole('button',{name:'设为平台管理员',exact:true}).isDisabled());await page.locator('#cancel').click();
+  await page.getByRole('button',{name:'♙　个人中心',exact:true}).click();
+  await page.locator('#profile-form').waitFor();assert.equal(await page.locator('dialog[open]').count(),0);
+  await page.locator('#profile-form [name=nickname]').fill('测试昵称');
+  await page.getByRole('button',{name:'保存资料',exact:true}).click();
+  await page.getByText('资料已保存',{exact:true}).waitFor();
+  assert.equal((await (await context.request.get(base+'/api/me')).json()).nickname,'测试昵称');
+  await page.setViewportSize({width:1440,height:1050});await page.screenshot({path:path.join(projectRoot,'data/profile-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:path.join(projectRoot,'data/profile-mobile.png'),fullPage:true});
   await page.getByRole('button',{name:'退出',exact:true}).click();await page.locator('#login-consent').waitFor();assert(!await page.locator('#login-consent').isChecked());
   console.log('PASS: login tabs, consent gate, public legal drafts, blank creation, 7 directories, persistent private favorites, help, and mobile layout.');
  }finally{if(browser)await browser.close();const exited=new Promise(r=>child.once('exit',r));child.kill();await exited;if(path.dirname(tmp)===os.tmpdir())fs.rmSync(tmp,{recursive:true,force:true});}
