@@ -237,7 +237,7 @@ def open_editor(core, db, user, doc, data):
                                                  'review': {'trackChanges': writable, 'reviewDisplay': 'markup' if writable else 'final'}}}}
     editor['token'] = sign(editor, config['secret'])
     core.audit(db, user, '打开 ONLYOFFICE' if writable else '预览 Word', doc['id'], session['key'])
-    return {'config': editor, 'script_url': config['public_url'] + '/web-apps/apps/api/documents/api.js', 'key': session['key'], 'writable': writable}
+    return {'config': editor, 'script_url': config['public_url'] + '/web-apps/apps/api/documents/api.js?rsms_review=2', 'key': session['key'], 'writable': writable}
 
 
 def compare(core, db, user, doc, data):

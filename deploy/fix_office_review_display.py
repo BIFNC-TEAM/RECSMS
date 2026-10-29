@@ -8,6 +8,23 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+import re
+
+
+def refresh_api_cache():
+    path=Path('/var/www/onlyoffice/documentserver/web-apps/apps/api/documents/api.js')
+    source=path.read_text()
+    patched,count=re.subn(r"const ver = '/10\.0\.0-[^']+';", "const ver = '/10.0.0-rsmsreview2';",source)
+    if count!=1:raise RuntimeError('Unsupported ONLYOFFICE API version; cache namespace unchanged')
+    if source==patched:return
+    backup=Path('/var/lib/onlyoffice/rsms-review-display-backups')/str(time.time_ns())
+    backup.mkdir(parents=True,mode=0o700)
+    shutil.copy2(path,backup/path.name)
+    compressed=Path(str(path)+'.gz')
+    if compressed.exists():shutil.copy2(compressed,backup/compressed.name)
+    path.write_text(patched)
+    if compressed.exists():compressed.write_bytes(gzip.compress(patched.encode()))
+    print('Updated API resource namespace to bypass cached viewer scripts')
 
 
 def main():
@@ -17,6 +34,7 @@ def main():
     guard='config.canViewReview = (config.isEdit || me.api.asc_HaveRevisionsChanges(true));'
     fixed_guard="config.canViewReview = (config.isEdit || me.api.asc_HaveRevisionsChanges(true) || (me.appConfig.customization && me.appConfig.customization.review && me.appConfig.customization.review.reviewDisplay === 'final'));"
     if marker in source and fixed_guard in source:
+        refresh_api_cache()
         print('Review display fix already installed')
         return
     start=source.index('} else if (config.canViewReview) {')
@@ -53,6 +71,7 @@ def main():
         subprocess.run(['node','--check',str(candidate)],check=True)
     path.write_text(patched)
     if compressed.exists():compressed.write_bytes(gzip.compress(patched.encode()))
+    refresh_api_cache()
     print('Installed review display fix; original JS and gzip backed up')
 
 

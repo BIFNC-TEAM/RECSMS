@@ -65,4 +65,4 @@ curl -fsS https://office.rsms.openzoo.net/healthcheck
 docker exec -i standards-office-docs python3 - < deploy/fix_office_review_display.py
 ```
 
-补丁同步更新 JS 与 gzip 文件，原文件备份在容器 `/var/lib/onlyoffice/rsms-review-display-backups/`。重复执行安全。容器普通重启保留补丁；重新创建或升级 ONLYOFFICE 容器后需重新核查并应用。未知代码结构会停止，勿在未经验证的新版本上强制替换。部署后须用含新增修订的实际文件确认只读预览显示正文，不能只检查接口返回成功。
+补丁同步更新 JS 与 gzip 文件，并将 Docs API 的静态资源命名空间切换为 `10.0.0-rsmsreview2`，避免旧浏览器继续使用长期缓存的查看器代码。平台脚本地址使用 `?rsms_review=2` 绕过 Docs API 脚本旧缓存。原文件备份在容器 `/var/lib/onlyoffice/rsms-review-display-backups/`。重复执行安全。容器普通重启保留补丁；重新创建或升级 ONLYOFFICE 容器后需重新核查并应用。未知代码结构会停止，勿在未经验证的新版本上强制替换。部署后须用含新增修订的实际文件确认只读预览显示正文，不能只检查接口返回成功。
