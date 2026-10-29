@@ -31,6 +31,13 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal(await page.getByRole('heading',{name:'目录',exact:true}).count(),0);
   await page.getByRole('button',{name:'新增管理员',exact:true}).click();assert.equal(await page.locator('#modal input').count(),1);assert.equal(await page.locator('#modal input[type=password]').count(),0);
   await page.getByLabel('用户手机号',{exact:true}).fill('13900000099');await page.getByRole('button',{name:'搜索用户',exact:true}).click();await page.getByText('未找到该手机号对应的已注册用户',{exact:true}).waitFor();assert(await page.getByRole('button',{name:'设为平台管理员',exact:true}).isDisabled());await page.locator('#cancel').click();
+  const docId=docs[0].id;
+  async function step(action,data){const r=await context.request.post(base+'/api/documents/'+docId+'/'+action,{data,headers:{'X-Requested-With':'StandardsPlatform'}});assert(r.ok(),await r.text());}
+  await step('transition',{target:'public',note:'测试公开'});await step('transition',{target:'approved',note:'测试批准'});await step('transition',{target:'published',note:'测试发布'});await step('next-cycle',{label:'V2',note:'测试下一轮'});
+  await page.getByRole('button',{name:/标准文档库/}).click();await page.getByRole('link',{name:'收藏功能验收文档',exact:true}).click();
+  await page.getByRole('button',{name:'历史版本',exact:true}).click();await page.getByRole('button',{name:'查看此版本正文',exact:true}).click();
+  await page.getByRole('button',{name:'返回当前版本',exact:true}).click();
+  await page.locator('[data-viewed-version]').filter({hasText:'V2'}).waitFor();assert.equal(await page.getByRole('button',{name:'返回当前版本',exact:true}).count(),0);
   await page.getByRole('button',{name:'♙　个人中心',exact:true}).click();
   await page.locator('#profile-form').waitFor();assert.equal(await page.locator('dialog[open]').count(),0);
   await page.locator('#profile-form [name=nickname]').fill('测试昵称');
