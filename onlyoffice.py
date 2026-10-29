@@ -440,6 +440,25 @@ def checkpoint(core, db, user, doc, data):
     return {'ok': True, 'version_id': vid}
 
 
+def export_pdf(core,db,user,doc,vid,content):
+    config=ready(core,db)
+    key='export-'+secrets.token_hex(24)
+    db.execute("INSERT INTO office_sessions(key,doc_id,version_id,user_id,state,source,created,updated) VALUES(?,?,?,?,?,?,?,?)",(key,doc['id'],vid,user['id'],'view',object_store.put(content),core.now(),core.now()))
+    db.commit()  # The converter retrieves this immutable snapshot through a separate connection.
+    token=sign({'kind':'office-file','key':key,'exp':int(time.time())+600},config['secret'])
+    payload={'async':False,'filetype':'docx','outputtype':'pdf','key':key,'url':config['platform_url']+'/api/office/file?'+urlencode({'token':token})}
+    payload['token']=sign(payload,config['secret'])
+    req=urllib.request.Request(config['internal_url']+'/converter',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.build_opener(NoRedirect).open(req,timeout=90) as response:result=json.load(response)
+    except Exception:
+        raise core.Error('PDF转换服务暂不可用，请稍后重试',502)
+    if not result.get('endConvert') or not result.get('fileUrl'):raise core.Error('PDF转换未完成，请稍后重试',502)
+    output=download(core,config,result['fileUrl'])
+    if not output.startswith(b'%PDF-'):raise core.Error('转换结果不是有效PDF',502)
+    return output
+
+
 def upload(core, db, user, doc, data):
     core.document(db, user, doc['id'], True)
     core.editable(doc)

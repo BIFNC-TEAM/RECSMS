@@ -18,6 +18,7 @@ import sys
 import onlyoffice
 import lifecycle
 import accounts
+import user_profile
 import phone_auth
 import review_issues
 import database
@@ -109,6 +110,7 @@ def init():
             db.execute('INSERT INTO directories(name) VALUES(?)', ('标准文件',))
         lifecycle.init(sys.modules[__name__], db)
         accounts.init(db)
+        user_profile.init(db)
         phone_auth.init(db)
         review_issues.init(db)
         workspace.init(sys.modules[__name__], db)
@@ -298,8 +300,10 @@ def route(db, user, method, path, query, data):
         db.execute('INSERT OR IGNORE INTO share_members VALUES(?,?,?)', (link['id'], user['id'], now()))
         audit(db, user, '通过分享链接加入协作', link['doc_id'], 'share=' + str(link['id']))
         return {'id': link['doc_id']}
+    if path == '/api/profile':
+        return user_profile.route(core,db,user,method,data)
     if path == '/api/me':
-        return dict(db.execute('SELECT id,username,role,phone,phone_verified FROM users WHERE id=?',(user['id'],)).fetchone()) | {'cloud_storage':database.production(), 'onboarding_state':workspace.onboarding_state(db,user['id'])}
+        return dict(db.execute('SELECT id,username,role,phone,phone_verified FROM users WHERE id=?',(user['id'],)).fetchone()) | {**user_profile.get(db,user['id']), 'cloud_storage':database.production(), 'onboarding_state':workspace.onboarding_state(db,user['id'])}
     if path == '/api/onboarding' and method == 'POST':
         return workspace.finish_onboarding(core, db, user, data)
     if path == '/api/help' and method == 'GET':
@@ -686,7 +690,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send(result['status'],{'error':result['error']})
                     if not binding:
                         content_pages.record(sys.modules[__name__], db, result['user_id'], 'sms')
-                    return self.send(200,{'ok':True},headers={'Set-Cookie':'session='+result['token']+'; HttpOnly; SameSite=Strict; Path=/'+('; Secure' if os.environ.get('STANDARD_COOKIE_SECURE')=='1' else '')})
+                    return self.send(200,{'ok':True},headers={'Set-Cookie':'session='+result['token']+'; Max-Age=28800; HttpOnly; SameSite=Strict; Path=/'+('; Secure' if os.environ.get('STANDARD_COOKIE_SECURE')=='1' else '')})
                 if path == '/api/login' and method == 'POST':
                     content_pages.require_acceptance(sys.modules[__name__], data)
                     key = 'login:'+phone_auth.client_ip(self.client_address[0],self.headers)
@@ -702,7 +706,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('DELETE FROM sessions WHERE expires<?', (time.time(),))
                     shared_cache.create(db,token,account['id'],time.time()+8*3600)
                     audit(db, account, '登录')
-                    return self.send(200, {'ok': True}, headers={'Set-Cookie': 'session=' + token + '; HttpOnly; SameSite=Strict; Path=/' + ('; Secure' if os.environ.get('STANDARD_COOKIE_SECURE') == '1' else '')})
+                    return self.send(200, {'ok': True}, headers={'Set-Cookie': 'session=' + token + '; Max-Age=28800; HttpOnly; SameSite=Strict; Path=/' + ('; Secure' if os.environ.get('STANDARD_COOKIE_SECURE') == '1' else '')})
                 user = db.execute('SELECT id,username,role FROM users WHERE id=?', (shared_cache.user_id(db,token),)).fetchone()
                 if not user:
                     raise Error('请先登录', 401)
@@ -753,6 +757,13 @@ class Handler(BaseHTTPRequestHandler):
                         if not file:
                             raise Error('附件不存在', 404)
                         content, name = file['data'], file['name']
+                    if not query.get('attachment_id') and query.get('format') in ('docx','pdf'):
+                        content=object_store.get(content)
+                        if name.endswith('.txt'):content=onlyoffice.make_docx(version['body'])
+                        name=doc['number']+'-'+version['label']+'.docx'
+                        if query['format']=='pdf':
+                            content=onlyoffice.export_pdf(sys.modules[__name__],db,user,doc,vid,content)
+                            name=name[:-5]+'.pdf'
                     audit(db, user, '下载', doc['id'], 'version=' + str(vid) + '; ' + name)
                     return self.send(200, object_store.get(content), 'application/octet-stream', {'Content-Disposition': "attachment; filename*=UTF-8''" + quote(name)})
                 result = route(db, user, method, path, query, data)

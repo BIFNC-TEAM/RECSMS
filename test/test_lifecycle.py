@@ -185,6 +185,14 @@ class LifecycleTest(unittest.TestCase):
         self.assertEqual(len(doc['versions']),count)
         self.assertIn('窗口尚未关闭',doc['working_body'])
         self.assertTrue(doc['last_saved_at']);self.assertEqual(doc['autosave_seconds'],5)
+        with patch.object(onlyoffice,'ready',return_value=config),patch.object(onlyoffice,'download',return_value=b'true'):
+            preview=self.action(self.admin,'office-open',version_id=original,view=True,working=True)
+        preview_query={k:v[0] for k,v in parse_qs(urlparse(preview['config']['document']['url']).query).items()}
+        with patch.object(onlyoffice,'ready',return_value=config):
+            self.assertEqual(onlyoffice.file(server,self.db,preview_query),content)
+        self.assertNotEqual(preview['key'],opened['key'])
+        self.db.commit()
+
         query={k:v[0] for k,v in parse_qs(urlparse(opened['config']['document']['url']).query).items()}
         with patch.object(onlyoffice,'ready',return_value=config):
             self.assertEqual(onlyoffice.file(server,self.db,query),content)

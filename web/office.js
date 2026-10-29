@@ -23,8 +23,10 @@ window.StandardsOffice={
     }catch(e){if(generation===this.generation&&status.isConnected)status.textContent='无法预览：'+e.message;}
   },
   async open({id,version,view=false,comparison=null,api,onClose}) {
+    // Destroy the background preview before editing; its read-only room must not retain an old snapshot.
+    this.unmount();
     // Load the trusted configured script before creating a blocking editing session.
-    const settings=await api('documents/'+id+(comparison?'/office-compare':'/office-open'),comparison||{version_id:version,view});
+    const settings=await api('documents/'+id+(comparison?'/office-compare':'/office-open'),comparison||{version_id:version,view,working:view});
     const dialog=document.createElement('dialog');
     dialog.className='office-dialog';
     dialog.innerHTML='<div class="heading"><div><h2>ONLYOFFICE Word 协作</h2><span id="office-status" role="status">正在加载编辑器…</span></div><button id="office-close">关闭编辑并等待保存</button><button id="office-leave" hidden>返回后台等待</button></div><div id="office-container"><div id="office-editor"></div></div><p class="muted">只读查看文档。</p>';
@@ -36,7 +38,7 @@ window.StandardsOffice={
     if(!settings.writable)close.textContent='关闭';
     if(settings.comparison){dialog.querySelector('h2').textContent='修订式比较：'+settings.comparison_labels.join(' → ');dialog.querySelector('p.muted').textContent='比较已保存的两个版本，以修订标记显示差异；原版本保持不变。若提示已有修订将被视为接受，可确认继续，仅影响本次比较视图。'}
     let editor=null,ended=false,timer=null,saveTimer=null,ownsFullscreen=false,closing=false,lastSaved=null,engineDirty=false,editorError='';
-    const savedLabel=()=>lastSaved?'上次保存 '+new Date(lastSaved).toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'等待首次自动保存';
+    const savedLabel=()=>lastSaved?'上次保存（北京时间） '+new Date(lastSaved).toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'等待首次自动保存';
     async function monitorSave(){
       if(ended||closing||!settings.writable)return;
       try{

@@ -146,7 +146,12 @@ def send(core,db,data,ip,user_id=None):
         response=cloud_call(core,'sms','SendSms',{'PhoneNumberSet':['+86'+number],'SmsSdkAppId':cfg['TENCENT_SMS_SDK_APP_ID'],'SignName':cfg['TENCENT_SMS_SIGN_NAME'],'TemplateId':cfg['TENCENT_SMS_TEMPLATE_ID'],'TemplateParamSet':[code,str(TTL//60)]})
         statuses=response.get('SendStatusSet') or []
         if len(statuses)!=1 or statuses[0].get('Code')!='Ok':
-            raise core.Error('短信发送失败，请稍后重试',502)
+            provider_code=statuses[0].get('Code') if len(statuses)==1 else None
+            safe_code=provider_code if isinstance(provider_code,str) and re.fullmatch(r'[A-Za-z0-9.]{1,100}',provider_code) else 'InvalidResponse'
+            request_id=response.get('RequestId','')
+            safe_id=request_id if isinstance(request_id,str) and re.fullmatch(r'[A-Za-z0-9-]{1,100}',request_id) else ''
+            core.audit(db,{'username':'sms-auth'},'短信发送失败',detail=number[:3]+'****'+number[-4:]+' code='+safe_code+' request_id='+safe_id)
+            raise core.Error('短信发送失败（'+safe_code+'），请联系管理员核查',502)
     except core.Error:
         db.execute("UPDATE sms_challenges SET send_state='failed',consumed=1 WHERE id=?",(challenge,))
         db.commit()

@@ -82,11 +82,29 @@ class PhoneAuthTest(unittest.TestCase):
 
     def test_provider_failure_is_not_a_valid_code(self):
         self.sms_ok=False
-        self.error(502,self.send)
+        with self.assertRaises(server.Error) as error:self.send()
+        self.assertEqual(error.exception.status,502)
+        self.assertIn('Failed',error.exception.message)
+        audit=self.db.execute("SELECT detail FROM audit WHERE action='短信发送失败'").fetchone()
+        self.assertIn('code=Failed',audit['detail'])
+        self.assertNotIn('13900139001',audit['detail'])
         row=self.db.execute('SELECT * FROM sms_challenges').fetchone()
         self.assertEqual(row['send_state'],'failed')
         self.assertTrue(row['consumed'])
         self.assertEqual(phone_auth.verify(server,self.db,{'challenge_id':row['id'],'code':self.code()})['status'],400)
+
+    def test_provider_diagnostics_do_not_expose_raw_response(self):
+        cloud=phone_auth.cloud_call.side_effect
+        def failure(core,service,action,payload):
+            if service=='captcha':return cloud(core,service,action,payload)
+            return {'SendStatusSet':[{'Code':'bad-secret\n13900139001','Message':'secret-message'}],
+                    'RequestId':'unsafe\nsecret'}
+        with patch.object(phone_auth,'cloud_call',side_effect=failure):
+            with self.assertRaises(server.Error) as error:self.send()
+        self.assertIn('InvalidResponse',error.exception.message)
+        audit=self.db.execute("SELECT detail FROM audit WHERE action='短信发送失败'").fetchone()['detail']
+        for private in ('bad-secret','13900139001','secret-message','unsafe'):
+            self.assertNotIn(private,error.exception.message+audit)
 
     def test_binding_is_authenticated_and_preserves_old_account(self):
         self.error(401,self.send,purpose='bind')
